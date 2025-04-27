@@ -1,0 +1,39 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: inventory-analysis-api
+    restart: unless-stopped
+    ports:
+      - "10005:10005"
+    environment:
+      - MONGODB_URI=${MONGODB_URI}
+      - MONGODB_DB_NAME=${MONGODB_DB_NAME}
+      - MODEL_PATH=/app/models
+      - MODEL_MAX_DEPTH=${MODEL_MAX_DEPTH}
+      - DAYS_OF_INVENTORY_TARGET=${DAYS_OF_INVENTORY_TARGET}
+      - CRITICAL_THRESHOLD=${CRITICAL_THRESHOLD}
+      - LOW_THRESHOLD=${LOW_THRESHOLD}
+      - NORMAL_THRESHOLD=${NORMAL_THRESHOLD}
+      - HIGH_THRESHOLD=${HIGH_THRESHOLD}
+    volumes:
+      - model_data:/app/models
+      - ./app:/app/app
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:10005/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+volumes:
+  model_data:
+    driver: local
