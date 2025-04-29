@@ -420,7 +420,12 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 class InventoryService:
-    # Constantes previas...
+    
+    CRITICAL_THRESHOLD = 7
+    LOW_THRESHOLD = 15
+    NORMAL_THRESHOLD = 30
+    HIGH_THRESHOLD = 60
+
     
     @classmethod
     async def process_data(cls, data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
