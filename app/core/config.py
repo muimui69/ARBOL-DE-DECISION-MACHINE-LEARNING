@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # MongoDB settings
     MONGODB_URI: str = os.getenv(
         "MONGODB_URI", 
-        "mongodb+srv://moisodev:moiso@cluster0.crz8eun.mongodb.net/EcommerML?retryWrites=true&w=majority"
+        "mongodb+srv://mauri:mauri@cluster0.rmkpe.mongodb.net/EcommerML?retryWrites=true&w=majority"
     )
     MONGODB_DB_NAME: str = os.getenv("MONGODB_DB_NAME", "EcommerML")
     
