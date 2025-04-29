@@ -11,6 +11,7 @@ from app.services.inventary_service import InventoryService
 from app.core.models.decision_tree import DecisionTreeModel
 from app.models.schemas import ProductInput, ProductPrediction, ProductBatch
 import pandas as pd
+import time
 
 router = APIRouter()
 
