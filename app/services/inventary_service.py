@@ -424,9 +424,118 @@ class InventoryService:
     
     @classmethod
     async def process_data(cls, data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
-        # El código existente es adecuado para este método
-        # pues es principalmente preparación de datos
-        pass
+        """
+        Procesa los datos de MongoDB con los nombres de colección correctos
+        """
+        try:
+            # Verificar los nombres de las colecciones disponibles
+            print(f"Colecciones recibidas: {list(data.keys())}")
+            
+            # Extraer con los nombres correctos de colecciones
+            ventas_df = data.get('ventas', pd.DataFrame())
+            ventadetalles_df = data.get('ventadetalles', pd.DataFrame())
+            productos_df = data.get('productos', pd.DataFrame())
+            producto_variedads_df = data.get('producto_variedads', pd.DataFrame())
+            ingresodetalles_df = data.get('ingresodetalles', pd.DataFrame())
+            
+            # Verificar datos mínimos
+            if productos_df.empty:
+                logger.warning("No hay datos de productos para procesar")
+                return {}
+            
+            if producto_variedads_df.empty:
+                logger.warning("No hay datos de variedades para procesar")
+                return {}
+            
+            # Convertir IDs a strings
+            for df, name in [
+                (ventas_df, 'ventas'),
+                (ventadetalles_df, 'ventadetalles'),
+                (productos_df, 'productos'),
+                (producto_variedads_df, 'producto_variedads'),
+                (ingresodetalles_df, 'ingresodetalles')
+            ]:
+                if not df.empty and '_id' in df.columns:
+                    logger.info(f"Convirtiendo IDs a string en {name}")
+                    df['_id'] = df['_id'].astype(str)
+            
+            # Convertir columnas relacionales a string
+            if not ventadetalles_df.empty:
+                for col in ['producto', 'variedad', 'venta']:
+                    if col in ventadetalles_df.columns:
+                        ventadetalles_df[col] = ventadetalles_df[col].astype(str)
+            
+            if not producto_variedads_df.empty and 'producto' in producto_variedads_df.columns:
+                producto_variedads_df['producto'] = producto_variedads_df['producto'].astype(str)
+            
+            if not ingresodetalles_df.empty:
+                for col in ['producto_variedad', 'producto']:
+                    if col in ingresodetalles_df.columns:
+                        ingresodetalles_df[col] = ingresodetalles_df[col].astype(str)
+            
+            # Calcular stock real basado en ingresos
+            if not ingresodetalles_df.empty and 'producto_variedad' in ingresodetalles_df.columns and 'estado' in ingresodetalles_df.columns:
+                logger.info("Calculando stock real a partir de ingresodetalles")
+                # Solo ingresos activos (estado=true)
+                ingresos_activos = ingresodetalles_df[ingresodetalles_df['estado'] == True]
+                # Agrupar por variedad
+                stock_df = ingresos_activos.groupby('producto_variedad').size().reset_index()
+                stock_df.columns = ['producto_variedad', 'stock_real']
+                
+                # Unir con variedades
+                producto_variedads_df = pd.merge(
+                    producto_variedads_df,
+                    stock_df,
+                    left_on='_id', 
+                    right_on='producto_variedad',
+                    how='left'
+                )
+                
+                # Rellenar valores nulos con 0
+                producto_variedads_df['stock_real'] = producto_variedads_df['stock_real'].fillna(0)
+            else:
+                # Si no hay datos de ingresos, usar cantidad como stock
+                if 'cantidad' in producto_variedads_df.columns:
+                    producto_variedads_df['stock_real'] = producto_variedads_df['cantidad']
+                else:
+                    producto_variedads_df['stock_real'] = 0
+                    logger.warning("No hay información de stock, usando 0 como predeterminado")
+            
+            # Convertir fechas de ventas
+            if not ventas_df.empty and 'createdAT' in ventas_df.columns:
+                ventas_df['fecha'] = pd.to_datetime(ventas_df['createdAT'])
+            
+            # Añadir fecha a ventadetalles
+            if not ventadetalles_df.empty and not ventas_df.empty:
+                if 'createdAT' not in ventadetalles_df.columns and 'venta' in ventadetalles_df.columns:
+                    # Crear diccionario de ID venta -> fecha
+                    venta_fechas = dict(zip(ventas_df['_id'], ventas_df['fecha']))
+                    # Mapear fechas a detalles
+                    ventadetalles_df['fecha'] = ventadetalles_df['venta'].map(venta_fechas)
+                elif 'createdAT' in ventadetalles_df.columns:
+                    ventadetalles_df['fecha'] = pd.to_datetime(ventadetalles_df['createdAT'])
+            
+            # Añadir nombres de productos a variedades
+            if not productos_df.empty and not producto_variedads_df.empty:
+                if 'titulo' in productos_df.columns and 'producto' in producto_variedads_df.columns:
+                    # Diccionario id -> nombre
+                    producto_nombres = dict(zip(productos_df['_id'], productos_df['titulo']))
+                    # Mapear nombres
+                    producto_variedads_df['nombre_producto'] = producto_variedads_df['producto'].map(producto_nombres)
+            
+            return {
+                'ventas': ventas_df,
+                'ventadetalles': ventadetalles_df,
+                'productos': productos_df,
+                'variedades': producto_variedads_df,
+                'ingresodetalles': ingresodetalles_df
+            }
+        
+        except Exception as e:
+            logger.error(f"Error al procesar datos: {e}")
+            import traceback
+            traceback.print_exc()
+            return {}
     
     @classmethod
     async def _process_variedad(cls, variedad, fecha_actual, ventas_diarias):
